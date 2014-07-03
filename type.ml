@@ -1535,22 +1535,25 @@ and unify_to_field ab tl b ?(allow_transitive_cast=true) (t,cfo) =
 	r
 	end
 
-and unify_with_variance t1 t2 =
+and unify_with_variance f t1 t2 =
 	let allows_variance_to t (tf,cfo) = match cfo with
 		| None -> type_iseq tf t
 		| Some _ -> false
 	in
 	match follow t1,follow t2 with
 	| TInst(c1,tl1),TInst(c2,tl2) when c1 == c2 ->
-		List.iter2 unify_with_variance tl1 tl2
+		List.iter2 f tl1 tl2
 	| TEnum(en1,tl1),TEnum(en2,tl2) when en1 == en2 ->
-		List.iter2 unify_with_variance tl1 tl2
+		List.iter2 f tl1 tl2
+	| TAbstract(a1,tl1),TAbstract(a2,tl2) when a1 == a2 && Meta.has Meta.CoreType a1.a_meta ->
+		List.iter2 f tl1 tl2
 	| TAbstract(a1,pl1),TAbstract(a2,pl2) ->
-		let ta1 = apply_params a1.a_types pl1 a1.a_this in
-		let ta2 = apply_params a2.a_types pl2 a2.a_this in
-		if (Meta.has Meta.CoreType a1.a_meta) && (Meta.has Meta.CoreType a2.a_meta) then
+		if (Meta.has Meta.CoreType a1.a_meta) && (Meta.has Meta.CoreType a2.a_meta) then begin
+			let ta1 = apply_params a1.a_types pl1 a1.a_this in
+			let ta2 = apply_params a2.a_types pl2 a2.a_this in
 			type_eq EqStrict ta1 ta2;
-		if not (List.exists (allows_variance_to ta2) a1.a_to) && not (List.exists (allows_variance_to ta1) a2.a_from) then
+		end;
+		if not (List.exists (allows_variance_to t2) a1.a_to) && not (List.exists (allows_variance_to t1) a2.a_from) then
 			error [cannot_unify t1 t2]
 	| TAbstract(a,pl),t ->
 		type_eq EqStrict (apply_params a.a_types pl a.a_this) t;
@@ -1574,7 +1577,7 @@ and with_variance f t1 t2 =
 	try
 		f t1 t2
 	with Unify_error l -> try
-		unify_with_variance t1 t2
+		unify_with_variance (with_variance f) t1 t2
 	with Unify_error _ ->
 		raise (Unify_error l)
 
